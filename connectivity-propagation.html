@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>连通性传播动画</title>
+<style>
+:root {
+  --foreground: #242424;
+  --background: #ffffff;
+  --border: #d1d5db;
+  --muted: #f4f4f5;
+  --viz-series-1: #2563eb;
+  --viz-series-2: #d97706;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 16px;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+h3 {
+  margin: 0 0 12px;
+  font-size: 21px;
+}
+
+.text-small { font-size: 13px; }
+.text-center { text-align: center; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+}
+
+.table th, .table td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th:first-child {
+  width: 116px;
+  text-align: left;
+}
+
+.viz-badge {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 13px;
+}
+
+.viz-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn:hover { background: var(--muted); }
+
+.btn-primary {
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+}
+
+.btn-primary:hover { opacity: .85; }
+
+.btn-ghost { border-color: transparent; }
+
+.btn:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+pre, code {
+  font-family: ui-monospace, SFMono-Regular, Menlo,
+               Consolas, monospace;
+  font-size: 14px;
+}
+
+.note {
+  margin-top: 20px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+#wire-propagation {
+  color: var(--foreground);
+  width: 100%;
+}
+
+#wire-propagation .network {
+  display: block;
+  width: 100%;
+  height: 205px;
+  margin: 8px 0;
+}
+
+#wire-propagation .network text {
+  fill: var(--foreground);
+  font-family: inherit;
+}
+
+#wire-propagation .network .edge {
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+#wire-propagation .network .active-edge {
+  stroke: var(--viz-series-1);
+  stroke-width: 3;
+}
+
+#wire-propagation .network .node {
+  fill: var(--background);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+#wire-propagation .network .reached {
+  fill: var(--viz-series-1);
+  fill-opacity: .2;
+  stroke: var(--viz-series-1);
+}
+
+#wire-propagation .network .new-ring {
+  fill: none;
+  stroke: var(--viz-series-2);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+#wire-propagation .statement {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+  background: var(--muted);
+  color: var(--foreground);
+  padding: 10px;
+}
+
+#wire-propagation .detail {
+  min-height: 3em;
+  margin-bottom: 12px;
+}
+
+#wire-propagation td.one {
+  background: color-mix(
+    in srgb, var(--viz-series-1) 18%, transparent
+  );
+}
+
+#wire-propagation td.added {
+  background: color-mix(
+    in srgb, var(--viz-series-2) 22%, transparent
+  );
+}
+
+#wire-propagation th { font-weight: 500; }
+
+#wire-propagation .phase {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+<main>
+<div id="wire-propagation">
+  <h3>连通性传播 · 查询 0 → 3</h3>
+
+  <div class="viz-row text-small">
+    导线 0：2—3　导线 1：1—2　导线 2：0—1
+  </div>
+
+  <svg
+    class="network"
+    role="img"
+    aria-label="八个接线柱和三根导线；实心节点表示 reach 已包含的节点，虚线圈表示本轮新加入 next_reach 的节点">
+  </svg>
+
+  <div class="viz-row text-small">
+    <span>● reach 已可达</span>
+    <span>◌ next_reach 本轮新增</span>
+  </div>
+
+  <table
+    class="table table-sm text-center tabular-nums"
+    aria-label="位向量逐位变化">
+    <thead>
+      <tr>
+        <th>下标</th>
+        <th>7</th><th>6</th><th>5</th><th>4</th>
+        <th>3</th><th>2</th><th>1</th><th>0</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-row="r"><th>reach</th></tr>
+      <tr data-row="n"><th>next_reach</th></tr>
+    </tbody>
+  </table>
+
+  <div class="phase viz-row">
+    <span class="viz-badge" data-phase></span>
+    <span data-count class="text-small tabular-nums"></span>
+  </div>
+
+  <pre class="statement"><code data-code></code></pre>
+
+  <div data-detail aria-live="polite" class="detail"></div>
+
+  <div class="viz-controls">
+    <button type="button" class="btn" data-prev>上一步</button>
+    <button type="button" class="btn btn-primary" data-play>播放</button>
+    <button type="button" class="btn" data-next>下一步</button>
+    <button type="button" class="btn btn-ghost" data-start>从头开始</button>
+    <span data-output class="tabular-nums"></span>
+  </div>
+</div>
+
+<p class="note">
+  这里把组合逻辑的计算过程放慢展示，三轮传播不代表三个时钟周期。
+</p>
+</main>
+
+<script>
+(() => {
+  const root = document.getElementById('wire-propagation');
+  const $ = s => root.querySelector(s);
+  const svg = $('.network');
+
+  const edges = [[2, 3], [1, 2], [0, 1]];
+  const steps = [];
+
+  let r = 1;
+  let n = 0;
+  let index = 0;
+  let timer = null;
+
+  function add(
+    phase, code, detail,
+    edge = -1, check = -1, out = null
+  ) {
+    steps.push({
+      r, n, phase, code, detail, edge, check, out
+    });
+  }
+
+  add(
+    '初始化',
+    "reach = 8'b00000001 << query_u;\nnext_reach = 8'b0;",
+    'query_u = 0，因此只有 reach[0] = 1。'
+  );
+
+  for (let round = 0; round < 3; round++) {
+    n = r;
+
+    add(
+      `第 ${round + 1} 轮 · i = ${round}`,
+      'next_reach = reach;',
+      '先复制上一轮结果；本轮所有 if 都读取 reach。'
+    );
+
+    edges.forEach(([a, b], e) => {
+      [
+        [a, b, 'a', 'b'],
+        [b, a, 'b', 'a']
+      ].forEach(([src, dst, sname, dname]) => {
+        const yes = Boolean(r & (1 << src));
+        const fresh = yes && !(n & (1 << dst));
+
+        if (yes) n |= 1 << dst;
+
+        add(
+          `第 ${round + 1} 轮 · 检查导线 ${e}`,
+          `if (reach[${sname}${e}])\n` +
+          `    next_reach[${dname}${e}] = 1'b1;`,
+          `reach[${src}] = ${yes ? 1 : 0} → ` +
+          (
+            yes
+              ? `将 next_reach[${dst}] 置 1` +
+                `${fresh ? '（新增）' : '（原本已为 1）'}`
+              : '条件不成立，不赋值'
+          ) + '。',
+          e,
+          src
+        );
+      });
+    });
+
+    r = n;
+
+    add(
+      `第 ${round + 1} 轮 · 合并结果`,
+      'reach = next_reach;',
+      `reach 更新为 ${r.toString(2).padStart(8, '0')}；` +
+      (
+        round < 2
+          ? '下一轮才能利用新增节点继续传播。'
+          : '三轮传播完成。'
+      )
+    );
+  }
+
+  add(
+    '输出结果',
+    'connected = reach[query_v];',
+    'query_v = 3，reach[3] = 1，所以 0 和 3 连通。',
+    -1,
+    -1,
+    1
+  );
+
+  for (const type of ['r', 'n']) {
+    const row = $(`[data-row="${type}"]`);
+
+    for (let bit = 7; bit >= 0; bit--) {
+      const cell = document.createElement('td');
+      cell.dataset.bit = bit;
+      row.appendChild(cell);
+    }
+  }
+
+  const NS = 'http://www.w3.org/2000/svg';
+
+  function el(tag, attrs, text) {
+    const x = document.createElementNS(NS, tag);
+
+    for (const [k, v] of Object.entries(attrs)) {
+      x.setAttribute(k, v);
+    }
+
+    if (text !== undefined) x.textContent = text;
+    svg.appendChild(x);
+    return x;
+  }
+
+  function draw() {
+    const s = steps[index];
+    const w = Math.max(280, svg.getBoundingClientRect().width);
+
+    const xs = [0, 1, 2, 3].map(
+      i => 30 + i * (w - 60) / 3
+    );
+
+    svg.setAttribute('viewBox', `0 0 ${w} 205`);
+    svg.replaceChildren();
+
+    edges.forEach(([a, b], e) => {
+      el('line', {
+        x1: xs[a],
+        y1: 56,
+        x2: xs[b],
+        y2: 56,
+        class: e === s.edge ? 'edge active-edge' : 'edge'
+      });
+
+      el('text', {
+        x: (xs[a] + xs[b]) / 2,
+        y: 24,
+        'text-anchor': 'middle'
+      }, `导线 ${e}`);
+    });
+
+    for (let v = 0; v < 8; v++) {
+      const x = xs[v % 4];
+      const y = v < 4 ? 56 : 148;
+      const has = Boolean(s.r & (1 << v));
+      const fresh = Boolean((s.n & ~s.r) & (1 << v));
+
+      el('circle', {
+        cx: x,
+        cy: y,
+        r: 18,
+        class: has ? 'node reached' : 'node'
+      });
+
+      if (fresh) {
+        el('circle', {
+          cx: x,
+          cy: y,
+          r: 23,
+          class: 'new-ring'
+        });
+      }
+
+      el('text', {
+        x,
+        y: y + 5,
+        'text-anchor': 'middle'
+      }, v);
+
+      let label =
+        v === 0 ? '起点 u' :
+        v === 3 ? '终点 v' :
+        v > 3 ? '未接线' : '';
+
+      if (s.check === v) label += ' · 正在读取';
+
+      if (label) {
+        el('text', {
+          x,
+          y: y + 38,
+          'text-anchor':
+            v % 4 === 0 ? 'start' :
+            v % 4 === 3 ? 'end' : 'middle',
+          class: 'text-small'
+        }, label);
+      }
+    }
+
+    for (const type of ['r', 'n']) {
+      const cells = $(
+        `[data-row="${type}"]`
+      ).querySelectorAll('td');
+
+      for (const cell of cells) {
+        const bit = Number(cell.dataset.bit);
+        const value = (s[type] >> bit) & 1;
+
+        cell.textContent = value;
+
+        cell.className = value
+          ? (
+              type === 'n' && !(s.r & (1 << bit))
+                ? 'added'
+                : 'one'
+            )
+          : '';
+      }
+    }
+
+    $('[data-phase]').textContent = s.phase;
+    $('[data-code]').textContent = s.code;
+    $('[data-detail]').textContent = s.detail;
+
+    $('[data-count]').textContent =
+      `${index + 1} / ${steps.length}`;
+
+    $('[data-output]').textContent =
+      `connected = ${s.out === null ? '待计算' : s.out}`;
+
+    $('[data-prev]').disabled = index === 0;
+    $('[data-next]').disabled = index === steps.length - 1;
+  }
+
+  function pause() {
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+    $('[data-play]').textContent = '播放';
+  }
+
+  $('[data-prev]').onclick = () => {
+    pause();
+    index = Math.max(0, index - 1);
+    draw();
+  };
+
+  $('[data-next]').onclick = () => {
+    pause();
+    index = Math.min(steps.length - 1, index + 1);
+    draw();
+  };
+
+  $('[data-start]').onclick = () => {
+    pause();
+    index = 0;
+    draw();
+  };
+
+  $('[data-play]').onclick = () => {
+    if (timer !== null) {
+      pause();
+      return;
+    }
+
+    if (index === steps.length - 1) index = 0;
+
+    $('[data-play]').textContent = '暂停';
+    draw();
+
+    timer = setInterval(() => {
+      index++;
+      draw();
+
+      if (index === steps.length - 1) pause();
+    }, 1500);
+  };
+
+  new ResizeObserver(draw).observe(svg);
+  draw();
+})();
+</script>
+</body>
+</html>
