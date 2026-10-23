@@ -31,3 +31,52 @@
 | `query_u[2:0]` | I | 待查询的第一个接线柱编号 |
 | `query_v[2:0]` | I | 待查询的第二个接线柱编号 |
 | `connected` | O | 两个接线柱是否连通，1 表示连通，0 表示不连通 |
+
+以下是解题代码：
+
+    module connectivity(
+        input [2:0] a0, b0,
+        input [2:0] a1, b1,
+        input [2:0] a2, b2,
+        input [2:0] query_u, query_v,
+        output reg connected
+    );
+    
+    reg [7:0] reach;
+    reg [7:0] next_reach;
+    integer i;
+    
+    always @(*) begin
+        // 初始时，query_u 只能到达自身
+        reach = 8'b00000001 << query_u;
+        next_reach = 8'b0;
+    
+        // 最多经过3根导线，因此传播3轮即可
+        for (i = 0; i < 3; i = i + 1) begin
+            next_reach = reach;
+    
+            // 第一根导线
+            if (reach[a0])
+                next_reach[b0] = 1'b1;
+            if (reach[b0])
+                next_reach[a0] = 1'b1;
+    
+            // 第二根导线
+            if (reach[a1])
+                next_reach[b1] = 1'b1;
+            if (reach[b1])
+                next_reach[a1] = 1'b1;
+    
+            // 第三根导线
+            if (reach[a2])
+                next_reach[b2] = 1'b1;
+            if (reach[b2])
+                next_reach[a2] = 1'b1;
+    
+            reach = next_reach;
+        end
+    
+        connected = reach[query_v];
+    end
+    
+    endmodule
